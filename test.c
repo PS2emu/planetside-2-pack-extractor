@@ -1,5 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
+
+// //0xAB
+// #define HI_NIBBLE(b) (((b) >> 4) & 0x0F)    //0xA
+// #define LO_NIBBLE(b) ((b) & 0x0F)           //0xB
 
 struct file_t
 {
@@ -40,7 +45,7 @@ int main(int argc, char** argv)
     unsigned char* subPackHeader;
     subPackHeader = (unsigned char *)malloc(8);
 
-    printf("%d", sizeof(int));
+    //printf("%d", sizeof(int));
 
     fseek(fp, 0, SEEK_SET);
     fread(subPackHeader, 1, 8, fp);
@@ -50,13 +55,35 @@ int main(int argc, char** argv)
     unsigned int chunkOffest = 0;
     unsigned int chunkFileCount = 0;
 
+    printf("print header\n");
     for(i = 0; i < 8; i++)
         printf("%02x ", subPackHeader[i] & 0xFF);
+    printf("\n");
     
-    chunkOffest = subPackHeader[3];
-    chunkFileCount = subPackHeader[7];
+    // Converts char values to uint for chunk_t variable assignment
+    printf("assign chunk vals\n");
+    unsigned char higher;
+    unsigned char lower;
+    int exp = 0;
+    for(i = 0; i < 8; i += 2){
+        higher = (((subPackHeader[(i / 2)]) >> 4) & 0x0F);
+        lower = ((subPackHeader[(i / 2)]) & 0x0F);
+        exp = pow(16, (8 - (i + 1)));
+        chunkOffest += (unsigned int)(higher) * exp;
+        exp = pow(16, (8 - (i + 2)));
+        chunkOffest += (unsigned int)(lower) * exp;
+    }
 
-    printf("Chunk size: %02x, Chunk FC: %02x\n", chunkOffest & 0xFF, chunkFileCount & 0xFF);
+    for(i = 0; i < 8; i += 2){
+        higher = (((subPackHeader[(i / 2) + 4]) >> 4) & 0x0F);
+        lower = ((subPackHeader[(i / 2) + 4]) & 0x0F);
+        exp = pow(16, (8 - (i + 1)));
+        chunkFileCount += (unsigned int)(higher) * exp;
+        exp = pow(16, (8 - (i + 2)));
+        chunkFileCount += (unsigned int)(lower) * exp;
+    }
+
+    printf("Chunk size: %08x, Chunk FC: %08x\n", chunkOffest & 0xFFFFFFFF, chunkFileCount & 0xFFFFFFFF);
 
     
     free(subPackHeader);
