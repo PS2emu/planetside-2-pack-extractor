@@ -6,9 +6,9 @@
 // #define HI_NIBBLE(b) (((b) >> 4) & 0x0F)    //0xA
 // #define LO_NIBBLE(b) ((b) & 0x0F)           //0xB
 
-struct chunk_t CollectChunkFiles(struct chunk_t chk, FILE **fp);
-struct file_t NextFile(FILE **fp);
-void NextChunk(unsigned int chkoff);
+struct chunk_t GetChunkHeader(unsigned int chkoff, FILE *fp);
+struct file_t GetFileHeader(FILE *fp);
+struct chunk_t CollectChunkFiles(struct chunk_t chk, FILE *fp);
 
 struct file_t
 {
@@ -25,12 +25,11 @@ struct chunk_t
     unsigned int next_chunk_offset; // first 4 bytes
     unsigned int file_count;        // next 4 bytes
     // should be array
-    struct file_t* files[];
+    struct file_t files[];
 };
 
-int main(int argc, char** argv)
-{
-    int i = 0;
+int main(int argc, char** argv){
+    int i;
 
     // Open file
     FILE *fp;
@@ -44,6 +43,19 @@ int main(int argc, char** argv)
     if(fp == NULL){
         printf("File not found\n");
     }
+
+    struct chunk_t myChunk = GetChunkHeader(0, fp);
+    //for(i = 0; i < myChunk.file_count; i++){
+        //myChunk.files[0] = 
+        GetFileHeader(fp);
+    //}
+    printf("closing file\n");
+    fclose(fp);
+    return 0;
+}
+
+struct chunk_t GetChunkHeader(unsigned int chkoff, FILE *fp){
+    int i = 0;
 
     //char buff[4096];
     unsigned char* subPackHeader;
@@ -94,29 +106,29 @@ int main(int argc, char** argv)
     curChunk.file_count = chunkFileCount;
     curChunk.files[chunkFileCount];
 
-    CollectChunkFiles(curChunk, &fp);
+    //CollectChunkFiles(curChunk, fp);
     
     free(subPackHeader);
-    fclose(fp);
-    printf("closed file");
-    return 0;
+    //fclose(fp);
+    //printf("closed file");
+    return curChunk;
 }
 
-struct chunk_t CollectChunkFiles(struct chunk_t chk, FILE **fp){
+struct file_t GetFileHeader(FILE *fp){
+    unsigned char higher;
+    unsigned char lower;
     int i;
-    int numericNameLength = 0;
-    struct file_t myFile;
+    int numericNameLength = 0;  // INITIALIZED TO 0 IN CASE NO FUTURE ASSIGNMENT
+    int exp;
+    struct file_t fileHeader;
 
     // Reads in 4 bytes/name length as char's
     unsigned char *fileNameLength;
     fileNameLength = malloc(4);
 
-    fread(fileNameLength, 1, 4, *fp);
+    fread(fileNameLength, 1, 4, fp);
 
     // Converts char's to uint
-    unsigned char higher;
-    unsigned char lower;
-    int exp;
     for(i = 0; i < 8; i += 2){
         higher = (((fileNameLength[(i / 2)]) >> 4) & 0x0F);
         lower = ((fileNameLength[(i / 2)]) & 0x0F);
@@ -126,26 +138,26 @@ struct chunk_t CollectChunkFiles(struct chunk_t chk, FILE **fp){
         numericNameLength += (unsigned int)(lower) * exp;
     }
 
-    if(numericNameLength == 26)
+    if(numericNameLength == 26) // CONFIRMING THE VAR VALUE
         printf("%d\n", numericNameLength);
-    myFile.name_length = numericNameLength;
+    fileHeader.name_length = numericNameLength;
 
     // Reads file name as string
     unsigned char *fileString;
     fileString = malloc(numericNameLength);
-    fread(fileString, 1, numericNameLength, *fp);
+    fread(fileString, 1, numericNameLength, fp);
 
-    printf("fileString size == %d ", sizeof(fileString));
-    printf("%s!\n", fileString);
-    myFile.name = fileString;
+    printf("fileString size == %x ", sizeof(fileString));   // REDUNDANT CONFIRMATION
+    printf("%s!\n", fileString);    // OUTPUT WAS:<mystring><BYTES FROM MEMORY>!
+    fileHeader.name = fileString;
 
     // Collects file offset, length, crc32
     unsigned char *fileOffset;
     unsigned int numericOffset = 0;
     fileOffset = malloc(4);
-    fread(fileOffset, 1, 4, *fp);
+    fread(fileOffset, 1, 4, fp);
     for(i = 0; i < 8; i += 2){
-        printf("%02x ", fileOffset[i / 2] & 0xFF);
+        //printf("%02x ", fileOffset[i / 2] & 0xFF);
         higher = (((fileOffset[(i / 2)]) >> 4) & 0x0F);
         //printf("%x ", higher & 0xF);
         lower = ((fileOffset[(i / 2)]) & 0x0F);
@@ -158,14 +170,14 @@ struct chunk_t CollectChunkFiles(struct chunk_t chk, FILE **fp){
         numericOffset += (unsigned int)(lower) * exp;
     }
     printf("%08x\n", numericOffset) & 0xFFFFFFFF;
-    myFile.offset = numericOffset;
+    fileHeader.offset = numericOffset;
 
     unsigned char *fileLength;
     unsigned int numericLength = 0;
     fileLength = malloc(4);
-    fread(fileLength, 1, 4, *fp);
+    fread(fileLength, 1, 4, fp);
     for(i = 0; i < 8; i += 2){
-        printf("%02x ", fileLength[i / 2] & 0xFF);
+        //printf("%02x ", fileLength[i / 2] & 0xFF);
         higher = (((fileLength[(i / 2)]) >> 4) & 0x0F);
         //printf("%x ", higher & 0xF);
         lower = ((fileLength[(i / 2)]) & 0x0F);
@@ -178,14 +190,14 @@ struct chunk_t CollectChunkFiles(struct chunk_t chk, FILE **fp){
         numericLength += (unsigned int)(lower) * exp;
     }
     printf("%08x\n", numericLength) & 0xFFFFFFFF;
-    myFile.length = numericLength;
+    fileHeader.length = numericLength;
 
     unsigned char *fileCRC;
     unsigned int numericCRC = 0;
     fileCRC = malloc(4);
-    fread(fileCRC, 1, 4, *fp);
+    fread(fileCRC, 1, 4, fp);
     for(i = 0; i < 8; i += 2){
-        printf("%02x ", fileCRC[i / 2] & 0xFF);
+        //printf("%02x ", fileCRC[i / 2] & 0xFF);
         higher = (((fileCRC[(i / 2)]) >> 4) & 0x0F);
         lower = ((fileCRC[(i / 2)]) & 0x0F);
         exp = pow(16, (8 - (i + 1)));
@@ -194,19 +206,16 @@ struct chunk_t CollectChunkFiles(struct chunk_t chk, FILE **fp){
         numericCRC += (unsigned int)(lower) * exp;
     }
     printf("%08x\n", numericCRC) & 0xFFFFFFFF;
-    myFile.crc32 = numericCRC;
+    fileHeader.crc32 = numericCRC;
 
     free(fileNameLength);
     free(fileOffset);
     free(fileLength);
     free(fileCRC);
-    return chk;
+    printf("returning fheader\n");
+    return fileHeader;
 }
 
-struct file_t NextFile(FILE **fp){
-
-}
-
-void NextChunk(unsigned int chkoff){
-    printf("Next Chunk\n");
+struct chunk_t CollectChunkFiles(struct chunk_t chk, FILE *fp){
+    
 }
