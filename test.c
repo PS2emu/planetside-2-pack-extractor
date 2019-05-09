@@ -6,6 +6,10 @@
 // #define HI_NIBBLE(b) (((b) >> 4) & 0x0F)    //0xA
 // #define LO_NIBBLE(b) ((b) & 0x0F)           //0xB
 
+struct chunk_t CollectChunkFiles(struct chunk_t chk, FILE **fp);
+struct file_t NextFile(FILE **fp);
+void NextChunk(unsigned int chkoff);
+
 struct file_t
 {
     unsigned int name_length;       // 4 bytes: File name length
@@ -85,9 +89,124 @@ int main(int argc, char** argv)
 
     printf("Chunk size: %08x, Chunk FC: %08x\n", chunkOffest & 0xFFFFFFFF, chunkFileCount & 0xFFFFFFFF);
 
+    struct chunk_t curChunk;
+    curChunk.next_chunk_offset = chunkOffest;
+    curChunk.file_count = chunkFileCount;
+    curChunk.files[chunkFileCount];
+
+    CollectChunkFiles(curChunk, &fp);
     
     free(subPackHeader);
     fclose(fp);
     printf("closed file");
     return 0;
+}
+
+struct chunk_t CollectChunkFiles(struct chunk_t chk, FILE **fp){
+    int i;
+    int numericNameLength = 0;
+    struct file_t myFile;
+
+    // Reads in 4 bytes/name length as char's
+    unsigned char *fileNameLength;
+    fileNameLength = malloc(4);
+
+    fread(fileNameLength, 1, 4, *fp);
+
+    // Converts char's to uint
+    unsigned char higher;
+    unsigned char lower;
+    int exp;
+    for(i = 0; i < 8; i += 2){
+        higher = (((fileNameLength[(i / 2)]) >> 4) & 0x0F);
+        lower = ((fileNameLength[(i / 2)]) & 0x0F);
+        exp = pow(16, (8 - (i + 1)));
+        numericNameLength += (unsigned int)(higher) * exp;
+        exp = pow(16, (8 - (i + 2)));
+        numericNameLength += (unsigned int)(lower) * exp;
+    }
+
+    if(numericNameLength == 26)
+        printf("%d\n", numericNameLength);
+    myFile.name_length = numericNameLength;
+
+    // Reads file name as string
+    unsigned char *fileString;
+    fileString = malloc(numericNameLength);
+    fread(fileString, 1, numericNameLength, *fp);
+
+    printf("fileString size == %d ", sizeof(fileString));
+    printf("%s!\n", fileString);
+    myFile.name = fileString;
+
+    // Collects file offset, length, crc32
+    unsigned char *fileOffset;
+    unsigned int numericOffset = 0;
+    fileOffset = malloc(4);
+    fread(fileOffset, 1, 4, *fp);
+    for(i = 0; i < 8; i += 2){
+        printf("%02x ", fileOffset[i / 2] & 0xFF);
+        higher = (((fileOffset[(i / 2)]) >> 4) & 0x0F);
+        //printf("%x ", higher & 0xF);
+        lower = ((fileOffset[(i / 2)]) & 0x0F);
+        //printf("%x ", lower & 0xF);
+        exp = pow(16, (8 - (i + 1)));
+        //printf("%d ", exp);
+        numericOffset += (unsigned int)(higher) * exp;
+        exp = pow(16, (8 - (i + 2)));
+        //printf("%d ", exp);
+        numericOffset += (unsigned int)(lower) * exp;
+    }
+    printf("%08x\n", numericOffset) & 0xFFFFFFFF;
+    myFile.offset = numericOffset;
+
+    unsigned char *fileLength;
+    unsigned int numericLength = 0;
+    fileLength = malloc(4);
+    fread(fileLength, 1, 4, *fp);
+    for(i = 0; i < 8; i += 2){
+        printf("%02x ", fileLength[i / 2] & 0xFF);
+        higher = (((fileLength[(i / 2)]) >> 4) & 0x0F);
+        //printf("%x ", higher & 0xF);
+        lower = ((fileLength[(i / 2)]) & 0x0F);
+        //printf("%x ", lower & 0xF);
+        exp = pow(16, (8 - (i + 1)));
+        //printf("%d ", exp);
+        numericLength += (unsigned int)(higher) * exp;
+        exp = pow(16, (8 - (i + 2)));
+        //printf("%d ", exp);
+        numericLength += (unsigned int)(lower) * exp;
+    }
+    printf("%08x\n", numericLength) & 0xFFFFFFFF;
+    myFile.length = numericLength;
+
+    unsigned char *fileCRC;
+    unsigned int numericCRC = 0;
+    fileCRC = malloc(4);
+    fread(fileCRC, 1, 4, *fp);
+    for(i = 0; i < 8; i += 2){
+        printf("%02x ", fileCRC[i / 2] & 0xFF);
+        higher = (((fileCRC[(i / 2)]) >> 4) & 0x0F);
+        lower = ((fileCRC[(i / 2)]) & 0x0F);
+        exp = pow(16, (8 - (i + 1)));
+        numericCRC += (unsigned int)(higher) * exp;
+        exp = pow(16, (8 - (i + 2)));
+        numericCRC += (unsigned int)(lower) * exp;
+    }
+    printf("%08x\n", numericCRC) & 0xFFFFFFFF;
+    myFile.crc32 = numericCRC;
+
+    free(fileNameLength);
+    free(fileOffset);
+    free(fileLength);
+    free(fileCRC);
+    return chk;
+}
+
+struct file_t NextFile(FILE **fp){
+
+}
+
+void NextChunk(unsigned int chkoff){
+    printf("Next Chunk\n");
 }
