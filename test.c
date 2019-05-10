@@ -43,19 +43,9 @@ int main(void){
     }
 
     struct chunk_t myChunk = GetChunkHeader(fp);
-    printf("%d\n", myChunk.file_count);
     for(i = 0; i < 133; i++){
         printf("%d ", i);
         struct file_t f = GetFileHeader(fp);
-        if(i >= 70 && i <= 75){
-            printf("nl %x\n", f.name_length);
-            //printf("name %s\n", f.name);
-            printf("off %x\n", f.offset);
-            printf("len %x\n", f.length);
-            printf("crc %x\n", f.crc32);
-            printf("tmem %d\n", totalHeaderSize);
-            //totalHeaderSize += 30;
-        }
         myChunk.files[totalHeaderSize] = f;
         prevFileHeaderSize =    sizeof(f.name_length) +
                                 4 +
@@ -63,8 +53,6 @@ int main(void){
                                 sizeof(f.length) + 
                                 sizeof(f.crc32);
         totalHeaderSize += prevFileHeaderSize;
-        if(i >= 70)
-            printf("tmem %08x\n", totalHeaderSize);
     }
     printf("closing file\n");
     fclose(fp);
@@ -84,14 +72,8 @@ struct chunk_t GetChunkHeader(FILE *fp){    // unsigned int chkoff
     // Assign header to chunk_t params
     unsigned int chunkOffest = 0;
     unsigned int chunkFileCount = 0;
-
-    printf("print header\n");
-    for(i = 0; i < 8; i++)
-        printf("%02x ", subPackHeader[i] & 0xFF);
-    printf("\n");
     
     // Converts char values to uint for chunk_t variable assignment
-    printf("assign chunk vals\n");
     unsigned char higher;
     unsigned char lower;
     int exp = 0;
@@ -113,7 +95,7 @@ struct chunk_t GetChunkHeader(FILE *fp){    // unsigned int chkoff
         chunkFileCount += (unsigned int)(lower) * exp;
     }
 
-    printf("Chunk size: %08x, Chunk FC: %08x\n", chunkOffest & 0xFFFFFFFF, chunkFileCount & 0xFFFFFFFF);
+    printf("Chunk size: %08x, Chunk FC: %x (%d)\n", chunkOffest & 0xFFFFFFFF, chunkFileCount & 0xFFFFFFFF, chunkFileCount);
 
     struct chunk_t curChunk;
     curChunk.next_chunk_offset = chunkOffest;
