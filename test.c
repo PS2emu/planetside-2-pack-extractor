@@ -2,18 +2,14 @@
 #include <stdlib.h>
 #include <math.h>
 
-// //0xAB
-// #define HI_NIBBLE(b) (((b) >> 4) & 0x0F)    //0xA
-// #define LO_NIBBLE(b) ((b) & 0x0F)           //0xB
-
-struct chunk_t GetChunkHeader(unsigned int chkoff, FILE *fp);
+struct chunk_t GetChunkHeader(FILE *fp);    // unsigned int chkoff, 
 struct file_t GetFileHeader(FILE *fp);
 struct chunk_t CollectChunkFiles(struct chunk_t chk, FILE *fp);
 
 struct file_t
 {
+    unsigned char* name;
     unsigned int name_length;       // 4 bytes: File name length
-    char* name;
     unsigned int offset;            // 4 bytes: Location of file
     unsigned int length;            // 4 bytes: Length/end location of file
     unsigned int crc32;             // 4 bytes: ?Some kind of check
@@ -24,12 +20,15 @@ struct chunk_t
 {
     unsigned int next_chunk_offset; // first 4 bytes
     unsigned int file_count;        // next 4 bytes
-    // should be array
-    struct file_t files[];
+    struct file_t *files;           // an array of file headers in memory
 };
 
-int main(int argc, char** argv){
+int main(void){
     int i;
+    unsigned int prevFileHeaderSize = 0;
+    unsigned int totalHeaderSize = 0;
+
+    printf("%08x\n", sizeof(struct file_t));
 
     // Open file
     FILE *fp;
@@ -37,35 +36,50 @@ int main(int argc, char** argv){
 
     // Reading file in as binary
     fp = fopen(fileName, "rb");
-    printf("File opened\n");
 
     // Read file
     if(fp == NULL){
         printf("File not found\n");
     }
 
-    struct chunk_t myChunk = GetChunkHeader(0, fp);
-    //for(i = 0; i < myChunk.file_count; i++){
-        //myChunk.files[0] = 
-        GetFileHeader(fp);
-    //}
+    struct chunk_t myChunk = GetChunkHeader(fp);
+    printf("%d\n", myChunk.file_count);
+    for(i = 0; i < 133; i++){
+        printf("%d ", i);
+        struct file_t f = GetFileHeader(fp);
+        if(i >= 70 && i <= 75){
+            printf("nl %x\n", f.name_length);
+            //printf("name %s\n", f.name);
+            printf("off %x\n", f.offset);
+            printf("len %x\n", f.length);
+            printf("crc %x\n", f.crc32);
+            printf("tmem %d\n", totalHeaderSize);
+            //totalHeaderSize += 30;
+        }
+        myChunk.files[totalHeaderSize] = f;
+        prevFileHeaderSize =    sizeof(f.name_length) +
+                                4 +
+                                sizeof(f.offset) +
+                                sizeof(f.length) + 
+                                sizeof(f.crc32);
+        totalHeaderSize += prevFileHeaderSize;
+        if(i >= 70)
+            printf("tmem %08x\n", totalHeaderSize);
+    }
     printf("closing file\n");
     fclose(fp);
     return 0;
 }
 
-struct chunk_t GetChunkHeader(unsigned int chkoff, FILE *fp){
+struct chunk_t GetChunkHeader(FILE *fp){    // unsigned int chkoff
     int i = 0;
 
     //char buff[4096];
     unsigned char* subPackHeader;
     subPackHeader = (unsigned char *)malloc(8);
 
-    //printf("%d", sizeof(int));
-
     fseek(fp, 0, SEEK_SET);
     fread(subPackHeader, 1, 8, fp);
-    printf("read from file\n");
 
     // Assign header to chunk_t params
     unsigned int chunkOffest = 0;
@@ -104,13 +118,11 @@ struct chunk_t GetChunkHeader(unsigned int chkoff, FILE *fp){
     struct chunk_t curChunk;
     curChunk.next_chunk_offset = chunkOffest;
     curChunk.file_count = chunkFileCount;
-    curChunk.files[chunkFileCount];
-
-    //CollectChunkFiles(curChunk, fp);
+    curChunk.files = malloc(curChunk.file_count * sizeof(struct file_t));    // 
+    // printf("files size %d\n", *curChunk.files);
+    // printf("files size location %d\n", &curChunk.files);
     
     free(subPackHeader);
-    //fclose(fp);
-    //printf("closed file");
     return curChunk;
 }
 
@@ -137,17 +149,12 @@ struct file_t GetFileHeader(FILE *fp){
         exp = pow(16, (8 - (i + 2)));
         numericNameLength += (unsigned int)(lower) * exp;
     }
-
-    if(numericNameLength == 26) // CONFIRMING THE VAR VALUE
-        printf("%d\n", numericNameLength);
     fileHeader.name_length = numericNameLength;
 
     // Reads file name as string
     unsigned char *fileString;
     fileString = malloc(numericNameLength);
     fread(fileString, 1, numericNameLength, fp);
-
-    printf("fileString size == %x ", sizeof(fileString));   // REDUNDANT CONFIRMATION
     printf("%s!\n", fileString);    // OUTPUT WAS:<mystring><BYTES FROM MEMORY>!
     fileHeader.name = fileString;
 
@@ -157,19 +164,13 @@ struct file_t GetFileHeader(FILE *fp){
     fileOffset = malloc(4);
     fread(fileOffset, 1, 4, fp);
     for(i = 0; i < 8; i += 2){
-        //printf("%02x ", fileOffset[i / 2] & 0xFF);
         higher = (((fileOffset[(i / 2)]) >> 4) & 0x0F);
-        //printf("%x ", higher & 0xF);
         lower = ((fileOffset[(i / 2)]) & 0x0F);
-        //printf("%x ", lower & 0xF);
         exp = pow(16, (8 - (i + 1)));
-        //printf("%d ", exp);
         numericOffset += (unsigned int)(higher) * exp;
         exp = pow(16, (8 - (i + 2)));
-        //printf("%d ", exp);
         numericOffset += (unsigned int)(lower) * exp;
     }
-    printf("%08x\n", numericOffset) & 0xFFFFFFFF;
     fileHeader.offset = numericOffset;
 
     unsigned char *fileLength;
@@ -177,19 +178,13 @@ struct file_t GetFileHeader(FILE *fp){
     fileLength = malloc(4);
     fread(fileLength, 1, 4, fp);
     for(i = 0; i < 8; i += 2){
-        //printf("%02x ", fileLength[i / 2] & 0xFF);
         higher = (((fileLength[(i / 2)]) >> 4) & 0x0F);
-        //printf("%x ", higher & 0xF);
         lower = ((fileLength[(i / 2)]) & 0x0F);
-        //printf("%x ", lower & 0xF);
         exp = pow(16, (8 - (i + 1)));
-        //printf("%d ", exp);
         numericLength += (unsigned int)(higher) * exp;
         exp = pow(16, (8 - (i + 2)));
-        //printf("%d ", exp);
         numericLength += (unsigned int)(lower) * exp;
     }
-    printf("%08x\n", numericLength) & 0xFFFFFFFF;
     fileHeader.length = numericLength;
 
     unsigned char *fileCRC;
@@ -197,7 +192,6 @@ struct file_t GetFileHeader(FILE *fp){
     fileCRC = malloc(4);
     fread(fileCRC, 1, 4, fp);
     for(i = 0; i < 8; i += 2){
-        //printf("%02x ", fileCRC[i / 2] & 0xFF);
         higher = (((fileCRC[(i / 2)]) >> 4) & 0x0F);
         lower = ((fileCRC[(i / 2)]) & 0x0F);
         exp = pow(16, (8 - (i + 1)));
@@ -205,17 +199,15 @@ struct file_t GetFileHeader(FILE *fp){
         exp = pow(16, (8 - (i + 2)));
         numericCRC += (unsigned int)(lower) * exp;
     }
-    printf("%08x\n", numericCRC) & 0xFFFFFFFF;
     fileHeader.crc32 = numericCRC;
 
     free(fileNameLength);
     free(fileOffset);
     free(fileLength);
     free(fileCRC);
-    printf("returning fheader\n");
     return fileHeader;
 }
 
-struct chunk_t CollectChunkFiles(struct chunk_t chk, FILE *fp){
+// struct chunk_t CollectChunkFiles(struct chunk_t chk, FILE *fp){
     
-}
+// }
