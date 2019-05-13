@@ -2,9 +2,10 @@
 #include <stdlib.h>
 #include <math.h>
 
-struct chunk_t GetChunkHeader(unsigned int chkoff, FILE *fp);    // 
+struct chunk_t GetChunkHeader(unsigned int chkoff, FILE *fp);
 struct file_t GetFileHeader(FILE *fp);
 struct chunk_t CollectChunkFiles(struct chunk_t chk, FILE *fp);
+void IterateThroughChunks(FILE *fp);
 
 struct file_t
 {
@@ -24,15 +25,13 @@ struct chunk_t
 };
 
 int main(void){
-    int i;
-    unsigned int prevFileHeaderSize = 0;
-    unsigned int totalHeaderSize = 0;
 
     //printf("%08x\n", sizeof(struct file_t));
 
     // Open file
+    // Create function to iterate through all .pack files*************************
     FILE *fp;
-    char fileName[] = "Assets_000.pack";
+    char fileName[] = "Assets_001.pack";
 
     // Reading file in as binary
     fp = fopen(fileName, "rb");
@@ -40,15 +39,33 @@ int main(void){
     // Read file
     if(fp == NULL){
         printf("File not found\n");
+        return 0;
     }
 
     // Itereate over all file headers in chunk
+    IterateThroughChunks(fp);
+
+    if(fclose(fp) == 0)
+        printf("Closed file\n");
+    else
+        printf("Couldn't close file\n");    
+    return 0;
+}
+
+void IterateThroughChunks(FILE *fp){
+
+    int i;
     int chkoff = 0;
+    unsigned int prevFileHeaderSize = 0;
+    unsigned int totalHeaderSize = 0;
     struct chunk_t myChunk;
+
     do{
         prevFileHeaderSize = 0;
         totalHeaderSize = 0;
+
         myChunk = GetChunkHeader(chkoff, fp);
+        
         for(i = 0; i < myChunk.file_count; i++){
             printf("%d ", i);
             struct file_t f = GetFileHeader(fp);
@@ -63,10 +80,6 @@ int main(void){
         chkoff = myChunk.next_chunk_offset;
     }
     while(chkoff != 0);
-
-    printf("closing file\n");
-    fclose(fp);
-    return 0;
 }
 
 struct chunk_t GetChunkHeader(unsigned int chkoff, FILE *fp){    // 
