@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <stdint.h>
 
 // Indicates header section lengths
 #define CHUNK_HEADER_LENGTH 8
@@ -15,6 +16,8 @@ struct chunk_t GetChunkHeader(unsigned int chkoff, FILE *fp);
 struct file_t GetFileHeader(FILE *fp);
 //struct chunk_t CollectChunkFiles(struct chunk_t chk, FILE *fp);
 struct chunk_t* IterateThroughChunks(FILE *fp);
+unsigned int GetCharArrayNumeric(unsigned char *header, unsigned int size);
+uint64_t bytes_to_u64(unsigned char* bytes, size_t len);
 
 struct file_t
 {
@@ -146,12 +149,7 @@ struct chunk_t GetChunkHeader(unsigned int chkoff, FILE *fp){
 }
 
 struct file_t GetFileHeader(FILE *fp){
-    unsigned char higher;
-    unsigned char lower;
     char nullSentienel = '\0';
-    int i;
-    int numericNameLength = 0;
-    int exp;
     struct file_t fileHeader;
 
     // Reads in 4 bytes/name length as char's
@@ -160,14 +158,8 @@ struct file_t GetFileHeader(FILE *fp){
     fread(fileNameLength, 1, FILE_NAME_LENGTH, fp);
 
     // Converts char's to uint
-    for(i = 0; i < 8; i += 2){
-        higher = (((fileNameLength[(i / 2)]) >> 4) & 0x0F);
-        lower = ((fileNameLength[(i / 2)]) & 0x0F);
-        exp = pow(16, (8 - (i + 1)));
-        numericNameLength += (unsigned int)(higher) * exp;
-        exp = pow(16, (8 - (i + 2)));
-        numericNameLength += (unsigned int)(lower) * exp;
-    }
+    unsigned int numericNameLength = 0;
+    numericNameLength = GetCharArrayNumeric(fileNameLength, FILE_NAME_LENGTH);
     fileHeader.name_length = numericNameLength;
 
     // Reads file name as string
@@ -181,40 +173,19 @@ struct file_t GetFileHeader(FILE *fp){
     unsigned char *fileOffset = malloc(FILE_OFFSET_LENGTH);
     unsigned int numericOffset = 0;
     fread(fileOffset, 1, FILE_OFFSET_LENGTH, fp);
-    for(i = 0; i < 8; i += 2){
-        higher = (((fileOffset[(i / 2)]) >> 4) & 0x0F);
-        lower = ((fileOffset[(i / 2)]) & 0x0F);
-        exp = pow(16, (8 - (i + 1)));
-        numericOffset += (unsigned int)(higher) * exp;
-        exp = pow(16, (8 - (i + 2)));
-        numericOffset += (unsigned int)(lower) * exp;
-    }
+    numericOffset = GetCharArrayNumeric(fileOffset, FILE_OFFSET_LENGTH);
     fileHeader.offset = numericOffset;
 
     unsigned int numericLength = 0;
     unsigned char *fileLength = malloc(FILE_SIZE_LENGTH);
     fread(fileLength, 1, FILE_SIZE_LENGTH, fp);
-    for(i = 0; i < 8; i += 2){
-        higher = (((fileLength[(i / 2)]) >> 4) & 0x0F);
-        lower = ((fileLength[(i / 2)]) & 0x0F);
-        exp = pow(16, (8 - (i + 1)));
-        numericLength += (unsigned int)(higher) * exp;
-        exp = pow(16, (8 - (i + 2)));
-        numericLength += (unsigned int)(lower) * exp;
-    }
+    numericLength = GetCharArrayNumeric(fileLength, FILE_SIZE_LENGTH);
     fileHeader.length = numericLength;
 
     unsigned int numericCRC = 0;
     unsigned char *fileCRC = malloc(FILE_CRC32_LENGTH);
     fread(fileCRC, 1, FILE_CRC32_LENGTH, fp);
-    for(i = 0; i < 8; i += 2){
-        higher = (((fileCRC[(i / 2)]) >> 4) & 0x0F);
-        lower = ((fileCRC[(i / 2)]) & 0x0F);
-        exp = pow(16, (8 - (i + 1)));
-        numericCRC += (unsigned int)(higher) * exp;
-        exp = pow(16, (8 - (i + 2)));
-        numericCRC += (unsigned int)(lower) * exp;
-    }
+    numericCRC = GetCharArrayNumeric(fileCRC, FILE_CRC32_LENGTH);
     fileHeader.crc32 = numericCRC;
 
     free(fileNameLength);
@@ -223,6 +194,42 @@ struct file_t GetFileHeader(FILE *fp){
     free(fileCRC);
     return fileHeader;
 }
+
+unsigned int GetCharArrayNumeric(unsigned char *header, unsigned int size){
+    unsigned int numeric = 0;
+
+    unsigned char higher;
+    unsigned char lower;
+    int i;
+    unsigned int exp;
+    for(i = 0; i < 8; i += 2){
+        higher = (((header[(i / 2)]) >> 4) & 0x0F);
+        lower = ((header[(i / 2)]) & 0x0F);
+        exp = pow(16, (8 - (i + 1)));
+        numeric += (unsigned int)(higher) * exp;
+        exp = pow(16, (8 - (i + 2)));
+        numeric += (unsigned int)(lower) * exp;
+    }
+    //printf("%x ", numeric);
+
+    return numeric;
+}
+
+// Better implementation of function above
+//uint64_t bytes_to_u64(unsigned char* bytes, size_t len) {
+//    if (len > 8) {
+//        printf("Bad length\n");
+//        return 0;
+//    }
+//
+//    uint64_t accumulator = 0;
+//    for (int i = 0; i < len; ++i) {
+//        accumulator <<= 8;
+//        accumulator += bytes[i];
+//    }
+//
+//    return accumulator;
+//}
 
 // struct chunk_t CollectChunkFiles(struct chunk_t chk, FILE *fp){
     
