@@ -17,7 +17,7 @@ struct file_t GetFileHeader(FILE *fp);
 //struct chunk_t CollectChunkFiles(struct chunk_t chk, FILE *fp);
 struct chunk_t* IterateThroughChunks(FILE *fp);
 unsigned int GetCharArrayNumeric(unsigned char *header, unsigned int size);
-uint64_t bytes_to_u64(unsigned char* bytes, size_t len);
+//uint64_t bytes_to_u64(unsigned char* bytes, size_t len);
 
 struct file_t
 {
@@ -74,77 +74,76 @@ struct chunk_t* IterateThroughChunks(FILE *fp){
     unsigned int totalHeaderSize;
     struct chunk_t myChunk;
 
-    struct chunk_t *packFile;
-    packFile = calloc(sizeof(struct chunk_t), 16);
+    // Allocates 16 instances of size chunk_t
+    struct chunk_t *packFile = calloc(sizeof(struct chunk_t), 16);
 
+    // while loop iterates through chunks
+    // for loop iterates through files is in the chunks
     do{
         totalHeaderSize = 0;
 
+        // gets the next chunk based on
+        // offset give by last chunk
         myChunk = GetChunkHeader(chkoff, fp);
 
         for(i = 0; i < myChunk.file_count; i++){
 
             printf("%d ", i);
             struct file_t f = GetFileHeader(fp);
+
+            // assigns file to chunk memory
             myChunk.files[totalHeaderSize] = f;
+
+            // prevFileHeaderSize will always be 20
+            // everything is listed for clarity
             unsigned int prevFileHeaderSize =    sizeof(f.name_length) +
                                     4 +
                                     sizeof(f.offset) +
                                     sizeof(f.length) +
                                     sizeof(f.crc32);
+
+            // Increase the totalHeaderSize for assigning next file header
             totalHeaderSize += prevFileHeaderSize;
         }
+
+        // Next chunk location defined
         chkoff = myChunk.next_chunk_offset;
+
+        // Current chunk stored
         packFile[j * sizeof(struct chunk_t)] = myChunk;
         j++;
     }
     while(chkoff != 0);
 
+    // Returns all chunks in .pack
     return packFile;
 }
 
 struct chunk_t GetChunkHeader(unsigned int chkoff, FILE *fp){
-    int i = 0;
 
-    unsigned char* subPackHeader = (unsigned char *)malloc(CHUNK_HEADER_LENGTH);
+    unsigned char* nextSubpackOffset = (unsigned char *)malloc(CHUNK_OFFSET_LENGTH);
+    unsigned char* curSubpackFileCount = (unsigned char*)malloc(CHUNK_FILECOUNT_LEN);
 
+    // fseek to correct location of chunk
     fseek(fp, chkoff, SEEK_SET);
-    fread(subPackHeader, 1, CHUNK_HEADER_LENGTH, fp);
 
     // Assign header to chunk_t params
-    unsigned int nextChunkOffest = 0;
-    unsigned int chunkFileCount = 0;
-    
-    // Converts char values to uint for chunk_t variable assignment
-    unsigned char higher;
-    unsigned char lower;
-    int exp = 0;
-    for(i = 0; i < 8; i += 2){
-        higher = (((subPackHeader[(i / 2)]) >> 4) & 0x0F);
-        lower = ((subPackHeader[(i / 2)]) & 0x0F);
-        exp = pow(16, (8 - (i + 1)));
-        nextChunkOffest += (unsigned int)(higher) * exp;
-        exp = pow(16, (8 - (i + 2)));
-        nextChunkOffest += (unsigned int)(lower) * exp;
-    }
+    fread(nextSubpackOffset, 1, CHUNK_OFFSET_LENGTH, fp);
+    fread(curSubpackFileCount, 1, CHUNK_FILECOUNT_LEN, fp);
 
-    for(i = 0; i < 8; i += 2){
-        higher = (((subPackHeader[(i / 2) + 4]) >> 4) & 0x0F);
-        lower = ((subPackHeader[(i / 2) + 4]) & 0x0F);
-        exp = pow(16, (8 - (i + 1)));
-        chunkFileCount += (unsigned int)(higher) * exp;
-        exp = pow(16, (8 - (i + 2)));
-        chunkFileCount += (unsigned int)(lower) * exp;
-    }
+    unsigned int nextChunkOffest = GetCharArrayNumeric(nextSubpackOffset, CHUNK_OFFSET_LENGTH);
 
-    printf("Next chunk: %08x, Chunk FC: %x (%d)\n", nextChunkOffest & 0xFFFFFFFF, chunkFileCount & 0xFFFFFFFF, chunkFileCount);
+    unsigned int chunkFileCount = GetCharArrayNumeric(curSubpackFileCount, CHUNK_FILECOUNT_LEN);
+
+    printf("Next chunk: %08x, Chunk FC: %x (%d)\n", nextChunkOffest, chunkFileCount, chunkFileCount);
 
     struct chunk_t curChunk;
     curChunk.next_chunk_offset = nextChunkOffest;
     curChunk.file_count = chunkFileCount;
-    curChunk.files = malloc(curChunk.file_count * sizeof(struct file_t));    // 
+    curChunk.files = malloc(curChunk.file_count * sizeof(struct file_t));
 
-    free(subPackHeader);
+    free(nextSubpackOffset);
+    free(curSubpackFileCount);
     return curChunk;
 }
 
@@ -169,19 +168,21 @@ struct file_t GetFileHeader(FILE *fp){
     printf("%s!\n", fileString);
     fileHeader.name = fileString;
 
-    // Collects file offset, length, crc32
+    // Collects file offset
     unsigned char *fileOffset = malloc(FILE_OFFSET_LENGTH);
     unsigned int numericOffset = 0;
     fread(fileOffset, 1, FILE_OFFSET_LENGTH, fp);
     numericOffset = GetCharArrayNumeric(fileOffset, FILE_OFFSET_LENGTH);
     fileHeader.offset = numericOffset;
 
+    // Collects file length
     unsigned int numericLength = 0;
     unsigned char *fileLength = malloc(FILE_SIZE_LENGTH);
     fread(fileLength, 1, FILE_SIZE_LENGTH, fp);
     numericLength = GetCharArrayNumeric(fileLength, FILE_SIZE_LENGTH);
     fileHeader.length = numericLength;
 
+    // Collects file CRC32 hash
     unsigned int numericCRC = 0;
     unsigned char *fileCRC = malloc(FILE_CRC32_LENGTH);
     fread(fileCRC, 1, FILE_CRC32_LENGTH, fp);
@@ -197,6 +198,11 @@ struct file_t GetFileHeader(FILE *fp){
 
 unsigned int GetCharArrayNumeric(unsigned char *header, unsigned int size){
     unsigned int numeric = 0;
+
+    if(size > 4){
+        printf("Too many bytes\n");
+        return 0;
+    }
 
     unsigned char higher;
     unsigned char lower;
