@@ -5,7 +5,7 @@
 struct chunk_t GetChunkHeader(unsigned int chkoff, FILE *fp);
 struct file_t GetFileHeader(FILE *fp);
 struct chunk_t CollectChunkFiles(struct chunk_t chk, FILE *fp);
-void IterateThroughChunks(FILE *fp);
+struct chunk_t* IterateThroughChunks(FILE *fp);
 
 struct file_t
 {
@@ -31,7 +31,7 @@ int main(void){
     // Open file
     // Create function to iterate through all .pack files*************************
     FILE *fp;
-    char fileName[] = "Assets_001.pack";
+    char fileName[] = "Assets_000.pack";
 
     // Reading file in as binary
     fp = fopen(fileName, "rb");
@@ -43,8 +43,12 @@ int main(void){
     }
 
     // Itereate over all file headers in chunk
-    IterateThroughChunks(fp);
+    struct chunk_t *packFile;
+    packFile = IterateThroughChunks(fp);
+    //printf("Num chunks: %d\n", sizeof(packFile));
+    //printf("First chunk: %d\n", packFile[4].file_count);
 
+    //free(packFile);
     if(fclose(fp) == 0)
         printf("Closed file\n");
     else
@@ -52,20 +56,23 @@ int main(void){
     return 0;
 }
 
-void IterateThroughChunks(FILE *fp){
+struct chunk_t* IterateThroughChunks(FILE *fp){
 
-    int i;
+    int i, j = 0;
     int chkoff = 0;
     unsigned int prevFileHeaderSize = 0;
     unsigned int totalHeaderSize = 0;
     struct chunk_t myChunk;
+
+    struct chunk_t *packFile;
+    packFile = calloc(sizeof(struct chunk_t), 16);
 
     do{
         prevFileHeaderSize = 0;
         totalHeaderSize = 0;
 
         myChunk = GetChunkHeader(chkoff, fp);
-        
+
         for(i = 0; i < myChunk.file_count; i++){
             printf("%d ", i);
             struct file_t f = GetFileHeader(fp);
@@ -78,11 +85,16 @@ void IterateThroughChunks(FILE *fp){
             totalHeaderSize += prevFileHeaderSize;
         }
         chkoff = myChunk.next_chunk_offset;
+        packFile[j * sizeof(struct chunk_t)] = myChunk;
+        j++;
     }
     while(chkoff != 0);
+    //printf("%d ", packFile[0].file_count);
+
+    return packFile;
 }
 
-struct chunk_t GetChunkHeader(unsigned int chkoff, FILE *fp){    // 
+struct chunk_t GetChunkHeader(unsigned int chkoff, FILE *fp){
     int i = 0;
 
     //char buff[4096];
