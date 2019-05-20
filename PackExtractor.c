@@ -15,12 +15,11 @@
 struct chunk_t GetChunkHeader(unsigned int chkoff, FILE *fp);
 struct file_t GetFileHeader(FILE *fp);
 //struct chunk_t CollectChunkFiles(struct chunk_t chk, FILE *fp);
-struct chunk_t* IterateThroughChunks(FILE *fp);
+struct chunk_t* IterateThroughChunks(int *chunkCount, FILE *fp);
 unsigned int GetCharArrayNumeric(unsigned char *header, unsigned int size);
 //uint64_t bytes_to_u64(unsigned char* bytes, size_t len);
 void freePackPointers(struct chunk_t *pack, unsigned int count);
-void freeChunkPointers(struct chunk_t *chunk, unsigned int size);
-void freeFilePointers(struct file_t *file, unsigned int count);
+void freeChunkPointers(struct chunk_t chunk);
 
 struct file_t
 {
@@ -55,17 +54,14 @@ int main(void){
         return 0;
     }
 
-    // Iterate over all file headers in chunk
-    struct chunk_t *packFile = IterateThroughChunks(fp);
+    // Keep track of the number of chunks in each .pack file
+    int numChunks = 0;
 
-    // Single pointer free test
-    for(int i = 0; i < 5; i++){
-        for(int j = 0; j < packFile[i].file_count; j++){
-            free(packFile[i].files[j].name); // Free's file name pointer
-        }
-        free(packFile[i].files); // Free's all files
-    }
-    free(packFile); // Free's all chunks/.pack
+    // Iterate over all file headers in chunk
+    struct chunk_t *packFile = IterateThroughChunks(&numChunks, fp);
+
+    // Free all 3 levels of pointers: chunks, files, names
+    freePackPointers(packFile, (unsigned int)numChunks);
 
     if(fclose(fp) == 0)
         printf("Closed file\n");
@@ -74,7 +70,7 @@ int main(void){
     return 0;
 }
 
-struct chunk_t* IterateThroughChunks(FILE *fp){
+struct chunk_t* IterateThroughChunks(int *chunkCount, FILE *fp){
 
     int i, j = 0;
     int chkoff = 0;
@@ -112,6 +108,8 @@ struct chunk_t* IterateThroughChunks(FILE *fp){
     }
     // Checks for last chunk, which will have an offset value of 00 00 00 00
     while(chkoff != 0);
+
+    *chunkCount = j;
 
     // Returns all chunks in .pack
     return packFile;
@@ -253,22 +251,17 @@ unsigned int GetCharArrayNumeric(unsigned char *header, unsigned int size){
 
 void freePackPointers(struct chunk_t *pack, unsigned int count){
     for(int i = 0; i < count; i++){
-        freeChunkPointers(pack, (unsigned int)sizeof(struct chunk_t)); // [sizeof(struct chunk_t) * i]
+        freeChunkPointers(pack[i]);
     }
 
     free(pack);
 }
 
-void freeChunkPointers(struct chunk_t *chunk, unsigned int size){
+void freeChunkPointers(struct chunk_t chunk){
 
-    freeFilePointers(chunk->files, chunk->file_count);
-    free(chunk);
-}
-
-void freeFilePointers(struct file_t *file, unsigned int count) {
-
-    for (int i = 0; i < count; i++) {
-        printf("Freed %s!\n", file->name);
-        free(file->name);
+    for(int i = 0; i < chunk.file_count; i++){
+        free(chunk.files[i].name);
     }
+
+    free(chunk.files);
 }
