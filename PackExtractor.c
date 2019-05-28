@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 #include <stdint.h>
 
 // Indicates header section lengths
@@ -14,7 +15,7 @@
 
 struct chunk_t GetChunkHeader(unsigned int chkoff, FILE *fp);
 struct file_t GetFileHeader(FILE *fp);
-//struct chunk_t CollectChunkFiles(struct chunk_t chk, FILE *fp);
+struct chunk_t CollectChunkFiles(struct chunk_t *chk, unsigned int fileCount, unsigned int packCount, FILE *fp);
 struct chunk_t* IterateThroughChunks(int *chunkCount, FILE *fp);
 unsigned int GetCharArrayNumeric(unsigned char *header, unsigned int size);
 //uint64_t bytes_to_u64(unsigned char* bytes, size_t len);
@@ -75,6 +76,9 @@ struct chunk_t* IterateThroughChunks(int *chunkCount, FILE *fp){
     int i, j = 0;
     int chkoff = 0;
     struct chunk_t myChunk;
+    unsigned char check[] = "ui_dialog_backroll.png";
+    unsigned int checkChunkNum = 0;
+    unsigned int checkFileNum = 0;
 
     // Allocates 16 instances of size chunk_t
     struct chunk_t *packFile = calloc(16, sizeof(struct chunk_t));
@@ -95,6 +99,11 @@ struct chunk_t* IterateThroughChunks(int *chunkCount, FILE *fp){
             printf("%d ", i);
             struct file_t f = GetFileHeader(fp);
 
+            if(strncmp((char *)f.name, (char *)check, 21) == 0){
+                checkChunkNum = j;
+                checkFileNum = i;
+            }
+
             // assigns file to chunk memory
             myChunk.files[i] = f;
         }
@@ -110,6 +119,8 @@ struct chunk_t* IterateThroughChunks(int *chunkCount, FILE *fp){
     while(chkoff != 0);
 
     *chunkCount = j;
+
+    CollectChunkFiles(packFile, checkFileNum, checkChunkNum, fp);
 
     // Returns all chunks in .pack
     return packFile;
@@ -245,9 +256,15 @@ unsigned int GetCharArrayNumeric(unsigned char *header, unsigned int size){
 //    return accumulator;
 //}
 
-// struct chunk_t CollectChunkFiles(struct chunk_t chk, FILE *fp){
-    
-// }
+ struct chunk_t CollectChunkFiles(struct chunk_t *chk, unsigned int fileCount, unsigned int chunkCount, FILE *fp){
+    fseek(fp, chk[chunkCount].files[fileCount].offset, SEEK_SET);
+    unsigned char *fileData = calloc(chk[chunkCount].files[fileCount].length, 1);
+    FILE *newFile;
+
+    newFile = fopen("sample_ui_dialog_backroll.png", "w+");
+    fread(fileData, 1, chk[chunkCount].files[fileCount].length, fp);
+    fwrite(fileData, 1, chk[chunkCount].files[fileCount].length, newFile);
+ }
 
 void freePackPointers(struct chunk_t *pack, unsigned int count){
     for(int i = 0; i < count; i++){
