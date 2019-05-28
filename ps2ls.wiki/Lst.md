@@ -1,0 +1,1 @@
+Contains names of the files referenced by the .gfx file with the same name.
