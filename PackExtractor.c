@@ -13,15 +13,6 @@
 #define FILE_SIZE_LENGTH    4
 #define FILE_CRC32_LENGTH   4
 
-struct chunk_t GetChunkHeader(unsigned int chkoff, FILE *fp);
-struct file_t GetFileHeader(FILE *fp);
-struct chunk_t CollectChunkFiles(struct chunk_t *chk, unsigned int fileCount, unsigned int packCount, FILE *fp);
-struct chunk_t* IterateThroughChunks(int *chunkCount, FILE *fp);
-unsigned int GetCharArrayNumeric(unsigned char *header, unsigned int size);
-//uint64_t bytes_to_u64(unsigned char* bytes, size_t len);
-void freePackPointers(struct chunk_t *pack, unsigned int count);
-void freeChunkPointers(struct chunk_t chunk);
-
 struct file_t
 {
     unsigned char* name;
@@ -38,6 +29,26 @@ struct chunk_t
     unsigned int file_count;        // next 4 bytes
     struct file_t *files;           // an array of file headers in memory
 };
+
+struct pack_t
+{
+    struct chunk_t *chunk;
+    unsigned int numChunks;
+};
+
+
+
+struct chunk_t GetChunkHeader(unsigned int chkoff, FILE *fp);
+struct file_t GetFileHeader(FILE *fp);
+struct chunk_t* IterateThroughChunks(int *chunkCount, FILE *fp);
+unsigned int GetCharArrayNumeric(unsigned char *header, unsigned int size);
+//uint64_t bytes_to_u64(unsigned char* bytes, size_t len);
+unsigned int SearchFileName(struct pack_t pack, unsigned char *fileName, FILE *fp);
+void CollectChunkFiles(struct chunk_t *chk, unsigned int chunkCount, unsigned int fileCount, FILE *fp);
+void freePackPointers(struct pack_t pack);
+void freeChunkPointers(struct chunk_t chunk);
+
+
 
 int main(void){
 
@@ -56,13 +67,27 @@ int main(void){
     }
 
     // Keep track of the number of chunks in each .pack file
-    int numChunks = 0;
+    int numberChunks = 0;
 
     // Iterate over all file headers in chunk
-    struct chunk_t *packFile = IterateThroughChunks(&numChunks, fp);
+    struct pack_t pack;
+    pack.chunk = IterateThroughChunks(&numberChunks, fp);
+    pack.numChunks = numberChunks;
+
+    // Search for user files specified by user
+    int searchCheck = 1;
+    unsigned char *searchingName = calloc(64, sizeof(unsigned char));
+    while(searchCheck) {
+        scanf("%s", searchingName);
+        searchCheck = SearchFileName(pack, searchingName, fp);
+        if(searchCheck == 1)
+            printf("File found!\n");
+        else
+            printf("File not found, exiting...\n");
+    }
 
     // Free all 3 levels of pointers: chunks, files, names
-    freePackPointers(packFile, (unsigned int)numChunks);
+    freePackPointers(pack);
 
     if(fclose(fp) == 0)
         printf("Closed file\n");
@@ -76,9 +101,6 @@ struct chunk_t* IterateThroughChunks(int *chunkCount, FILE *fp){
     int i, j = 0;
     int chkoff = 0;
     struct chunk_t myChunk;
-    unsigned char check[] = "ui_dialog_backroll.png";
-    unsigned int checkChunkNum = 0;
-    unsigned int checkFileNum = 0;
 
     // Allocates 16 instances of size chunk_t
     struct chunk_t *packFile = calloc(16, sizeof(struct chunk_t));
@@ -99,11 +121,6 @@ struct chunk_t* IterateThroughChunks(int *chunkCount, FILE *fp){
             printf("%d ", i);
             struct file_t f = GetFileHeader(fp);
 
-            if(strncmp((char *)f.name, (char *)check, 21) == 0){
-                checkChunkNum = j;
-                checkFileNum = i;
-            }
-
             // assigns file to chunk memory
             myChunk.files[i] = f;
         }
@@ -119,8 +136,6 @@ struct chunk_t* IterateThroughChunks(int *chunkCount, FILE *fp){
     while(chkoff != 0);
 
     *chunkCount = j;
-
-    CollectChunkFiles(packFile, checkFileNum, checkChunkNum, fp);
 
     // Returns all chunks in .pack
     return packFile;
@@ -256,22 +271,42 @@ unsigned int GetCharArrayNumeric(unsigned char *header, unsigned int size){
 //    return accumulator;
 //}
 
- struct chunk_t CollectChunkFiles(struct chunk_t *chk, unsigned int fileCount, unsigned int chunkCount, FILE *fp){
+unsigned int SearchFileName(struct pack_t pack, unsigned char *fileName, FILE *fp){
+    unsigned int chunkLocation = 0;
+    unsigned int fileLocation = 0;
+
+    for(int i = 0; i < pack.numChunks; i++){
+
+        for(int j = 0; j < pack.chunk[i].file_count; j++){
+
+            if(strcmp((char *)fileName, (char *)pack.chunk[i].files[j].name) == 0){
+                chunkLocation = i;
+                fileLocation = j;
+                CollectChunkFiles(pack.chunk, chunkLocation, fileLocation, fp);
+                return 1;
+            }
+        }
+    }
+
+    return 0;
+}
+
+ void CollectChunkFiles(struct chunk_t *chk, unsigned int chunkCount, unsigned int fileCount, FILE *fp){
     fseek(fp, chk[chunkCount].files[fileCount].offset, SEEK_SET);
     unsigned char *fileData = calloc(chk[chunkCount].files[fileCount].length, 1);
     FILE *newFile;
 
-    newFile = fopen("sample_ui_dialog_backroll.png", "w+");
+    newFile = fopen((char *)chk[chunkCount].files[fileCount].name, "w+");
     fread(fileData, 1, chk[chunkCount].files[fileCount].length, fp);
     fwrite(fileData, 1, chk[chunkCount].files[fileCount].length, newFile);
  }
 
-void freePackPointers(struct chunk_t *pack, unsigned int count){
-    for(int i = 0; i < count; i++){
-        freeChunkPointers(pack[i]);
+void freePackPointers(struct pack_t pack){
+    for(int i = 0; i < pack.numChunks; i++){
+        freeChunkPointers(pack.chunk[i]);
     }
 
-    free(pack);
+    free(pack.chunk);
 }
 
 void freeChunkPointers(struct chunk_t chunk){
