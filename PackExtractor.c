@@ -32,8 +32,8 @@ struct chunk_t
 
 struct pack_t
 {
-    struct chunk_t *chunk;
-    unsigned int numChunks;
+    struct chunk_t *chunk;          // Array of chunk_t's
+    unsigned int numChunks;         // Number of chunks in pack file
 };
 
 
@@ -43,8 +43,8 @@ struct file_t *GetFileHeader(FILE *fp);
 struct chunk_t* IterateThroughChunks(int *chunkCount, FILE *fp);
 unsigned int GetCharArrayNumeric(unsigned char *header, unsigned int size);
 //uint64_t bytes_to_u64(unsigned char* bytes, size_t len);
-unsigned int SearchFileName(struct pack_t pack, unsigned char *fileName, FILE *fp);
-void CollectChunkFiles(struct chunk_t *chk, unsigned int chunkCount, unsigned int fileCount, FILE *fp);
+void SearchFileName(struct pack_t pack, FILE *fp);
+void Extract(struct chunk_t *chk, unsigned int chunkCount, unsigned int fileCount, FILE *fp);
 void freePackPointers(struct pack_t pack);
 void freeChunkPointers(struct chunk_t chunk);
 
@@ -55,7 +55,7 @@ int main(void){
     // Open file
     // Create function to iterate through all .pack files*************************
     FILE *fp;
-    char fileName[] = "Assets_000.pack";
+    char fileName[] = "Assets_001.pack";
 
     // Reading file in as binary
     fp = fopen(fileName, "rb");
@@ -75,16 +75,7 @@ int main(void){
     pack.numChunks = numberChunks;
 
     // Search for user files specified by user
-    int searchCheck = 1;
-    unsigned char *searchingName = calloc(64, sizeof(unsigned char));
-    while(searchCheck) {
-        scanf("%s", searchingName);
-        searchCheck = SearchFileName(pack, searchingName, fp);
-        if(searchCheck == 1)
-            printf("File found!\n");
-        else
-            printf("File not found, exiting...\n");
-    }
+    SearchFileName(pack, fp);
 
     // Free all 3 levels of pointers: chunks, files, names
     freePackPointers(pack);
@@ -272,27 +263,94 @@ unsigned int GetCharArrayNumeric(unsigned char *header, unsigned int size){
 //    return accumulator;
 //}
 
-unsigned int SearchFileName(struct pack_t pack, unsigned char *fileName, FILE *fp){
+void SearchFileName(struct pack_t pack, FILE *fp){
     unsigned int chunkLocation = 0;
     unsigned int fileLocation = 0;
+    char input = '0';
 
-    for(int i = 0; i < pack.numChunks; i++){
+    unsigned char *searchingName = calloc(64, sizeof(unsigned char));
 
-        for(int j = 0; j < pack.chunk[i].file_count; j++){
+    printf("*****Search Options*****\n");
+    printf("Exact file (1), Substring (2): ");
+    scanf(" %c", &input);
 
-            if(strcmp((char *)fileName, (char *)pack.chunk[i].files[j].name) == 0){
-                chunkLocation = i;
-                fileLocation = j;
-                CollectChunkFiles(pack.chunk, chunkLocation, fileLocation, fp);
-                return 1;
-            }
+    while(input == '1' || input == '2') {
+        switch (input) {
+            case '1':
+                printf("Enter the full file name with extension: ");
+                scanf("%s", searchingName);
+                for (int i = 0; i < pack.numChunks; i++) {
+
+                    for (int j = 0; j < pack.chunk[i].file_count; j++) {
+
+                        if (strcmp((char *) searchingName, (char *) pack.chunk[i].files[j].name) == 0) {
+                            printf("File found, extracting!\n");
+                            chunkLocation = i;
+                            fileLocation = j;
+                            Extract(pack.chunk, chunkLocation, fileLocation, fp);
+                        }
+                    }
+                }
+
+                printf("*****Search Options*****\n");
+                printf("Exact file (1), Substring (2): ");
+                scanf(" %c", &input);
+
+                memset(searchingName, '\0', 64);
+                break;
+
+            case '2':
+                printf("Enter the substring: ");
+                scanf("%s", searchingName);
+
+                for (int i = 0; i < pack.numChunks; i++) {
+
+                    for (int j = 0; j < pack.chunk[i].file_count; j++) {
+
+                        char extractConfirm = '0';
+                        if (strstr((char *) pack.chunk[i].files[j].name, (char *) searchingName) != NULL) {
+                            printf("Extract this file? (y/n): %s", pack.chunk[i].files[j].name);
+                            scanf(" %c", &extractConfirm);
+
+                            if(extractConfirm == 'y') {
+                                chunkLocation = i;
+                                fileLocation = j;
+                                Extract(pack.chunk, chunkLocation, fileLocation, fp);
+                            }
+
+                            if(extractConfirm == 'n'){
+                                char confirm = 'n';
+                                printf("Continue? (y/n): ");
+                                scanf("%c", &confirm);
+
+                                if(confirm == 'y')
+                                    printf("Continuing\n");
+                                else
+                                    break;
+                            }
+                        }
+                    }
+                }
+
+                printf("*****Search Options*****\n");
+                printf("Exact file (1), Substring (2): ");
+                scanf(" %c", &input);
+
+                memset(searchingName, '\0', 64);
+                break;
+
+            default:
+                printf("Invalid input\n");
+                printf("Exact file (1), Substring (2): ");
+                scanf(" %c", &input);
+
+                memset(searchingName, '\0', 64);
+                break;
         }
     }
-
-    return 0;
 }
 
- void CollectChunkFiles(struct chunk_t *chk, unsigned int chunkCount, unsigned int fileCount, FILE *fp){
+ void Extract(struct chunk_t *chk, unsigned int chunkCount, unsigned int fileCount, FILE *fp){
     fseek(fp, chk[chunkCount].files[fileCount].offset, SEEK_SET);
     unsigned char *fileData = calloc(chk[chunkCount].files[fileCount].length, 1);
     FILE *newFile;
