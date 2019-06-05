@@ -87,6 +87,7 @@ int main(void){
     return 0;
 }
 
+// Cycles through every chunk in a .pack file
 struct chunk_t* IterateThroughChunks(int *chunkCount, FILE *fp){
 
     int i, j = 0;
@@ -133,6 +134,7 @@ struct chunk_t* IterateThroughChunks(int *chunkCount, FILE *fp){
     return packFile;
 }
 
+// Collects chunk header into memory
 struct chunk_t *GetChunkHeader(unsigned int chkoff, FILE *fp){
 
     unsigned char* nextSubpackOffset = (unsigned char *)malloc(CHUNK_OFFSET_LENGTH);
@@ -164,6 +166,7 @@ struct chunk_t *GetChunkHeader(unsigned int chkoff, FILE *fp){
     return curChunk;
 }
 
+// Collects file header into memory
 struct file_t *GetFileHeader(FILE *fp){
     struct file_t *fileHeader = calloc(1, sizeof(struct file_t));
 
@@ -223,6 +226,7 @@ struct file_t *GetFileHeader(FILE *fp){
     return fileHeader;
 }
 
+// Returns number from array of 4 bytes
 unsigned int GetCharArrayNumeric(unsigned char *header, unsigned int size){
     unsigned int numeric = 0;
 
@@ -263,6 +267,11 @@ unsigned int GetCharArrayNumeric(unsigned char *header, unsigned int size){
 //    return accumulator;
 //}
 
+/*
+ * User inputs to search through files
+ * Uses the pack_t structure for traversal
+ * Searches via exact filename or substring
+ */
 void SearchFileName(struct pack_t pack, FILE *fp){
     unsigned int chunkLocation = 0;
     unsigned int fileLocation = 0;
@@ -350,6 +359,7 @@ void SearchFileName(struct pack_t pack, FILE *fp){
     }
 }
 
+// Writes file as original filename in working directory
  void Extract(struct chunk_t *chk, unsigned int chunkCount, unsigned int fileCount, FILE *fp){
     fseek(fp, chk[chunkCount].files[fileCount].offset, SEEK_SET);
     unsigned char *fileData = calloc(chk[chunkCount].files[fileCount].length, 1);
@@ -360,6 +370,7 @@ void SearchFileName(struct pack_t pack, FILE *fp){
     fwrite(fileData, 1, chk[chunkCount].files[fileCount].length, newFile);
  }
 
+ // Free's chunk pointers in pack
 void freePackPointers(struct pack_t pack){
     for(int i = 0; i < pack.numChunks; i++){
         freeChunkPointers(pack.chunk[i]);
@@ -368,6 +379,7 @@ void freePackPointers(struct pack_t pack){
     free(pack.chunk);
 }
 
+// Free's file name pointers and files pointers in chunks
 void freeChunkPointers(struct chunk_t chunk){
 
     for(int i = 0; i < chunk.file_count; i++){
