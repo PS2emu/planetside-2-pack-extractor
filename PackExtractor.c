@@ -38,101 +38,14 @@ struct pack_t
 
 
 
-struct chunk_t *GetChunkHeader(unsigned int chkoff, FILE *fp);
-struct file_t *GetFileHeader(FILE *fp);
-struct chunk_t* IterateThroughChunks(int *chunkCount, FILE *fp);
 unsigned int GetCharArrayNumeric(unsigned char *header, unsigned int size);
 //uint64_t bytes_to_u64(unsigned char* bytes, size_t len);
 void SearchFileName(struct pack_t pack, FILE *fp);
 void Extract(struct chunk_t *chk, unsigned int chunkCount, unsigned int fileCount, FILE *fp);
-void freePackPointers(struct pack_t pack);
-void freeChunkPointers(struct chunk_t chunk);
+void FreePackPointers(struct pack_t pack);
+void FreeChunkPointers(struct chunk_t chunk);
 
 
-
-int main(void){
-
-    // Open file
-    // Create function to iterate through all .pack files*************************
-    FILE *fp;
-    char fileName[] = "Assets_001.pack";
-
-    // Reading file in as binary
-    fp = fopen(fileName, "rb");
-
-    // Read file
-    if(fp == NULL){
-        printf("File not found\n");
-        return 0;
-    }
-
-    // Keep track of the number of chunks in each .pack file
-    int numberChunks = 0;
-
-    // Iterate over all file headers in chunk
-    struct pack_t pack;
-    pack.chunk = IterateThroughChunks(&numberChunks, fp);
-    pack.numChunks = numberChunks;
-
-    // Search for user files specified by user
-    SearchFileName(pack, fp);
-
-    // Free all 3 levels of pointers: chunks, files, names
-    freePackPointers(pack);
-
-    if(fclose(fp) == 0)
-        printf("Closed file\n");
-    else
-        printf("Couldn't close file\n");
-    return 0;
-}
-
-// Cycles through every chunk in a .pack file
-struct chunk_t* IterateThroughChunks(int *chunkCount, FILE *fp){
-
-    int i, j = 0;
-    int chkoff = 0;
-    struct chunk_t *myChunk = calloc(1, sizeof(struct chunk_t));
-
-    // Allocates 16 instances of size chunk_t
-    struct chunk_t *packFile = calloc(16, sizeof(struct chunk_t));
-    if(packFile == NULL) {
-        printf("NULL POINTER (packFile - IterateThroughChunks)\n");
-    }
-
-    // while loop iterates through chunks
-    // for loop iterates through files is in the chunks
-    do{
-
-        // gets the next chunk based on
-        // offset give by last chunk
-        myChunk = GetChunkHeader(chkoff, fp);
-
-        for(i = 0; i < myChunk->file_count; i++){
-
-            printf("%d ", i);
-            struct file_t *f = GetFileHeader(fp);
-
-            // assigns file to chunk memory
-            myChunk->files[i] = *f;
-            free(f);
-        }
-
-        // Next chunk location defined
-        chkoff = myChunk->next_chunk_offset;
-
-        // Current chunk stored
-        packFile[j] = *myChunk;
-        j++;
-    }
-    // Checks for last chunk, which will have an offset value of 00 00 00 00
-    while(chkoff != 0);
-
-    *chunkCount = j;
-
-    // Returns all chunks in .pack
-    return packFile;
-}
 
 // Collects chunk header into memory
 struct chunk_t *GetChunkHeader(unsigned int chkoff, FILE *fp){
@@ -224,6 +137,54 @@ struct file_t *GetFileHeader(FILE *fp){
     free(fileCRC);
 
     return fileHeader;
+}
+
+// Cycles through every chunk in a .pack file
+struct chunk_t* IterateThroughChunks(int *chunkCount, FILE *fp){
+
+    int i, j = 0;
+    int chkoff = 0;
+    struct chunk_t *myChunk = calloc(1, sizeof(struct chunk_t));
+
+    // Allocates 16 instances of size chunk_t
+    struct chunk_t *packFile = calloc(16, sizeof(struct chunk_t));
+    if(packFile == NULL) {
+        printf("NULL POINTER (packFile - IterateThroughChunks)\n");
+    }
+
+    // while loop iterates through chunks
+    // for loop iterates through files is in the chunks
+    do{
+
+        // gets the next chunk based on
+        // offset give by last chunk
+        myChunk = GetChunkHeader(chkoff, fp);
+
+        for(i = 0; i < myChunk->file_count; i++){
+
+            printf("%d ", i);
+            struct file_t *f = GetFileHeader(fp);
+
+            // assigns file to chunk memory
+            myChunk->files[i] = *f;
+            free(f);
+        }
+
+        // Next chunk location defined
+        chkoff = myChunk->next_chunk_offset;
+
+        // Current chunk stored
+        packFile[j] = *myChunk;
+        j++;
+    }
+    // Checks for last chunk, which will have an offset value of 00 00 00 00
+    while(chkoff != 0);
+
+    *chunkCount = j;
+
+    free(myChunk);
+    // Returns all chunks in .pack
+    return packFile;
 }
 
 // Returns number from array of 4 bytes
@@ -371,20 +332,57 @@ void SearchFileName(struct pack_t pack, FILE *fp){
  }
 
  // Free's chunk pointers in pack
-void freePackPointers(struct pack_t pack){
+void FreePackPointers(struct pack_t pack){
     for(int i = 0; i < pack.numChunks; i++){
-        freeChunkPointers(pack.chunk[i]);
+        FreeChunkPointers(pack.chunk[i]);
     }
 
     free(pack.chunk);
 }
 
 // Free's file name pointers and files pointers in chunks
-void freeChunkPointers(struct chunk_t chunk){
+void FreeChunkPointers(struct chunk_t chunk){
 
     for(int i = 0; i < chunk.file_count; i++){
         free(chunk.files[i].name);
     }
 
     free(chunk.files);
+}
+
+int main(void){
+
+    // Open file
+    // Create function to iterate through all .pack files*************************
+    FILE *fp;
+    char fileName[] = "Assets_000.pack";
+
+    // Reading file in as binary
+    fp = fopen(fileName, "rb");
+
+    // Read file
+    if(fp == NULL){
+        printf("File not found\n");
+        return 0;
+    }
+
+    // Keep track of the number of chunks in each .pack file
+    int numberChunks = 0;
+
+    // Iterate over all file headers in chunk
+    struct pack_t pack;
+    pack.chunk = IterateThroughChunks(&numberChunks, fp);
+    pack.numChunks = numberChunks;
+
+    // Search for user files specified by user
+    SearchFileName(pack, fp);
+
+    // Free all 3 levels of pointers: chunks, files, names
+    FreePackPointers(pack);
+
+    if(fclose(fp) == 0)
+        printf("Closed file\n");
+    else
+        printf("Couldn't close file\n");
+    return 0;
 }
