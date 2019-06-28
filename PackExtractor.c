@@ -13,42 +13,43 @@
 #define FILE_SIZE_LENGTH    4
 #define FILE_CRC32_LENGTH   4
 
-struct file_t
+typedef struct file_t
 {
     unsigned char *name;
     unsigned int name_length;       // 4 bytes: File name length
     unsigned int offset;            // 4 bytes: Location of file
     unsigned int length;            // 4 bytes: Length/end location of file
     unsigned int crc32;             // 4 bytes: ?Some kind of check
-};
+} fileType;
 
 // Header is 8 Bytes 00 - 07
-struct chunk_t
+typedef struct chunk_t
 {
     unsigned int next_chunk_offset; // first 4 bytes
     unsigned int file_count;        // next 4 bytes
-    struct file_t *files;           // an array of file headers in memory
-};
+    fileType *files;           // an array of file headers in memory
+} chunkType;
 
 struct pack_t
 {
-    struct chunk_t *chunk;          // Array of chunk_t's
+    chunkType *chunk;          // Array of chunk_t's
     unsigned int numChunks;         // Number of chunks in pack file
 };
 
 
 
+unsigned int GetFileHeaderSubstring(unsigned int subheaderSize, FILE *fp);
 unsigned int GetCharArrayNumeric(unsigned char *header, unsigned int size);
 //uint64_t bytes_to_u64(unsigned char* bytes, size_t len);
 void SearchFileName(struct pack_t pack, FILE *fp);
-void Extract(struct chunk_t *chk, unsigned int chunkCount, unsigned int fileCount, FILE *fp);
+void Extract(chunkType *chk, unsigned int chunkCount, unsigned int fileCount, FILE *fp);
 void FreePackPointers(struct pack_t *pack);
-void FreeChunkPointers(struct chunk_t *chunk);
+void FreeChunkPointers(chunkType *chunk);
 
-// Changes: standardized pointer's as: <type> *<var_name>
+
 
 // Collects chunk header into memory
-struct chunk_t *GetChunkHeader(unsigned int chkoff, FILE *fp){
+chunkType *GetChunkHeader(unsigned int chkoff, FILE *fp){
 
     unsigned char *nextSubpackOffset = (unsigned char *)malloc(CHUNK_OFFSET_LENGTH);
     unsigned char *curSubpackFileCount = (unsigned char *)malloc(CHUNK_FILECOUNT_LEN);
@@ -66,10 +67,10 @@ struct chunk_t *GetChunkHeader(unsigned int chkoff, FILE *fp){
 
     printf("Next chunk: %08x, Chunk FC: %x (%d)\n", nextChunkOffest, chunkFileCount, chunkFileCount);
 
-    struct chunk_t *curChunk = calloc(1, sizeof(struct chunk_t));
+    chunkType *curChunk = calloc(1, sizeof(chunkType));
     curChunk->next_chunk_offset = nextChunkOffest;
     curChunk->file_count = chunkFileCount;
-    curChunk->files = (struct file_t*)calloc(curChunk->file_count, sizeof(struct file_t));
+    curChunk->files = (fileType*)calloc(curChunk->file_count, sizeof(fileType));
     if(curChunk->files == NULL) {
         printf("NULL POINTER (curChunk.files)\n");
     }
@@ -79,75 +80,58 @@ struct chunk_t *GetChunkHeader(unsigned int chkoff, FILE *fp){
     return curChunk;
 }
 
+unsigned int GetFileHeaderSubstring(unsigned int subheaderSize, FILE *fp){
+    unsigned int numeric = 0;
+
+    unsigned char *nextBytes = calloc(subheaderSize, 1);
+    if(nextBytes == NULL){
+        printf("NULL pointer reading file header");
+        return 1;
+    }
+    fread(nextBytes, 1, subheaderSize, fp);
+    numeric = GetCharArrayNumeric(nextBytes, subheaderSize);
+    free(nextBytes);
+
+    return numeric;
+}
+
 // Collects file header into memory
-struct file_t *GetFileHeader(FILE *fp){
-    struct file_t *fileHeader = calloc(1, sizeof(struct file_t));
+fileType *GetFileHeader(FILE *fp){
+    fileType *fileHeader = calloc(1, sizeof(fileType));
 
     // Reads in 4 bytes/name length as char's
-    unsigned int numericNameLength = 0;
-    unsigned char *fileNameLength = calloc(FILE_NAME_LENGTH, 1);
-    if(fileNameLength == NULL) {
-        printf("NULL POINTER (fileNameLength)\n");
-    }
-    fread(fileNameLength, 1, FILE_NAME_LENGTH, fp);
-    numericNameLength = GetCharArrayNumeric(fileNameLength, FILE_NAME_LENGTH);
-    fileHeader->name_length = numericNameLength;
-    free(fileNameLength);
+    fileHeader->name_length = GetFileHeaderSubstring(FILE_NAME_LENGTH, fp);
 
     // Reads file name as string
-    unsigned char *fileString = calloc(numericNameLength + 1, 1);
+    unsigned char *fileString = calloc(fileHeader->name_length + 1, 1);
     if(fileString == NULL) {
         printf("NULL POINTER (fileString)\n");
     }
-    fread(fileString, 1, numericNameLength, fp);
+    fread(fileString, 1, fileHeader->name_length, fp);
     printf("%s!\n", fileString);
     fileHeader->name = fileString;
 
     // Collects file offset
-    unsigned int numericOffset = 0;
-    unsigned char *fileOffset = calloc(FILE_OFFSET_LENGTH, 1);
-    if(fileOffset == NULL) {
-        printf("NULL POINTER (fileOffset)\n");
-    }
-    fread(fileOffset, 1, FILE_OFFSET_LENGTH, fp);
-    numericOffset = GetCharArrayNumeric(fileOffset, FILE_OFFSET_LENGTH);
-    fileHeader->offset = numericOffset;
-    free(fileOffset);
+    fileHeader->offset = GetFileHeaderSubstring(FILE_OFFSET_LENGTH, fp);
 
     // Collects file length
-    unsigned int numericLength = 0;
-    unsigned char *fileLength = calloc(FILE_SIZE_LENGTH, 1);
-    if(fileLength == NULL) {
-        printf("NULL POINTER (fileLength)\n");
-    }
-    fread(fileLength, 1, FILE_SIZE_LENGTH, fp);
-    numericLength = GetCharArrayNumeric(fileLength, FILE_SIZE_LENGTH);
-    fileHeader->length = numericLength;
-    free(fileLength);
+    fileHeader->length = GetFileHeaderSubstring(FILE_SIZE_LENGTH, fp);
 
     // Collects file CRC32 hash
-    unsigned int numericCRC = 0;
-    unsigned char *fileCRC = calloc(FILE_CRC32_LENGTH, 1);
-    if(fileCRC == NULL) {
-        printf("NULL POINTER (fileCRC)\n");
-    }
-    fread(fileCRC, 1, FILE_CRC32_LENGTH, fp);
-    numericCRC = GetCharArrayNumeric(fileCRC, FILE_CRC32_LENGTH);
-    fileHeader->crc32 = numericCRC;
-    free(fileCRC);
+    fileHeader->crc32 = GetFileHeaderSubstring(FILE_CRC32_LENGTH, fp);
 
     return fileHeader;
 }
 
 // Cycles through every chunk in a .pack file
-struct chunk_t *IterateThroughChunks(int *chunkCount, FILE *fp){
+chunkType *IterateThroughChunks(int *chunkCount, FILE *fp){
 
     int i, j = 0;
     int chkoff = 0;
-    struct chunk_t *myChunk = calloc(1, sizeof(struct chunk_t));
+    chunkType *myChunk = calloc(1, sizeof(chunkType));
 
     // Allocates 16 instances of size chunk_t
-    struct chunk_t *packFile = calloc(16, sizeof(struct chunk_t));
+    chunkType *packFile = calloc(16, sizeof(chunkType));
     if(packFile == NULL) {
         printf("NULL POINTER (packFile - IterateThroughChunks)\n");
     }
@@ -163,11 +147,9 @@ struct chunk_t *IterateThroughChunks(int *chunkCount, FILE *fp){
         for(i = 0; i < myChunk->file_count; i++){
 
             printf("%d ", i);
-            struct file_t *f = GetFileHeader(fp);
 
             // assigns file to chunk memory
-            myChunk->files[i] = *f;
-            free(f);
+            myChunk->files[i] = *GetFileHeader(fp);
         }
 
         // Next chunk location defined
@@ -321,7 +303,7 @@ void SearchFileName(struct pack_t pack, FILE *fp){
 }
 
 // Writes file as original filename in working directory
- void Extract(struct chunk_t *chk, unsigned int chunkCount, unsigned int fileCount, FILE *fp){
+ void Extract(chunkType *chk, unsigned int chunkCount, unsigned int fileCount, FILE *fp){
     fseek(fp, chk[chunkCount].files[fileCount].offset, SEEK_SET);
     unsigned char *fileData = calloc(chk[chunkCount].files[fileCount].length, 1);
     FILE *newFile;
@@ -341,7 +323,7 @@ void FreePackPointers(struct pack_t *pack){
 }
 
 // Free's file name pointers and files pointers in chunks
-void FreeChunkPointers(struct chunk_t *chunk){
+void FreeChunkPointers(chunkType *chunk){
 
     for(int i = 0; i < chunk->file_count; i++){
         free(chunk->files[i].name);
